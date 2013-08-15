@@ -24,6 +24,7 @@
 	/*	I can't test this Apple stuff!	*/
 	#include <OpenGL/gl.h>
 	#include <Carbon/Carbon.h>
+    #import <mach-o/dyld.h>
 	#define APIENTRY
 #else
 	#include <GL/gl.h>
@@ -47,6 +48,18 @@ enum{
 	SOIL_CAPABILITY_NONE = 0,
 	SOIL_CAPABILITY_PRESENT = 1
 };
+
+/* for glGetStringi */
+static int has_get_string_i_capability = SOIL_CAPABILITY_UNKNOWN;
+int query_get_string_i_capability( void );
+
+#define SOIL_GL_NUM_EXTENSIONS                 0x821D
+typedef const GLubyte * (APIENTRY * P_SOIL_GETSTRINGIPROC) (GLenum name, GLuint index);
+P_SOIL_GETSTRINGIPROC soilGlGetStringi = NULL;
+
+static int soilIsExtensionSupported(const char *name);
+static void *soilLoadProcAddr(const char *procName);
+
 static int has_cubemap_capability = SOIL_CAPABILITY_UNKNOWN;
 int query_cubemap_capability( void );
 #define SOIL_TEXTURE_WRAP_R					0x8072
@@ -80,6 +93,13 @@ int query_DXT_capability( void );
 #define SOIL_RGBA_S3TC_DXT5		0x83F3
 typedef void (APIENTRY * P_SOIL_GLCOMPRESSEDTEXIMAGE2DPROC) (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const GLvoid * data);
 P_SOIL_GLCOMPRESSEDTEXIMAGE2DPROC soilGlCompressedTexImage2D = NULL;
+
+/* for glGenerateMipmap */
+static int has_gen_mipmap_capability = SOIL_CAPABILITY_UNKNOWN;
+typedef void (APIENTRY * P_SOIL_PFNGLGENERATEMIPMAPPROC) (GLenum target);
+static P_SOIL_PFNGLGENERATEMIPMAPPROC soilGlGenerateMipmap = NULL;
+static int query_gen_mipmap_capability( void );
+
 unsigned int SOIL_direct_load_DDS(
 		const char *filename,
 		unsigned int reuse_texture_ID,
@@ -1342,8 +1362,8 @@ unsigned int
 			check_for_GL_errors( "GL_TEXTURE_WRAP_*" );
 		} else
 		{
-			/*	unsigned int clamp_mode = SOIL_CLAMP_TO_EDGE;	*/
-			unsigned int clamp_mode = GL_CLAMP;
+			unsigned int clamp_mode = SOIL_CLAMP_TO_EDGE;
+			/*unsigned int clamp_mode = GL_CLAMP;*/
 			glTexParameteri( opengl_texture_type, GL_TEXTURE_WRAP_S, clamp_mode );
 			glTexParameteri( opengl_texture_type, GL_TEXTURE_WRAP_T, clamp_mode );
 			if( opengl_texture_type == SOIL_TEXTURE_CUBE_MAP )
@@ -1809,8 +1829,8 @@ unsigned int SOIL_direct_load_DDS_from_memory(
 			glTexParameteri( opengl_texture_type, SOIL_TEXTURE_WRAP_R, GL_REPEAT );
 		} else
 		{
-			/*	unsigned int clamp_mode = SOIL_CLAMP_TO_EDGE;	*/
-			unsigned int clamp_mode = GL_CLAMP;
+			unsigned int clamp_mode = SOIL_CLAMP_TO_EDGE;
+			//unsigned int clamp_mode = GL_CLAMP;
 			glTexParameteri( opengl_texture_type, GL_TEXTURE_WRAP_S, clamp_mode );
 			glTexParameteri( opengl_texture_type, GL_TEXTURE_WRAP_T, clamp_mode );
 			glTexParameteri( opengl_texture_type, SOIL_TEXTURE_WRAP_R, clamp_mode );
@@ -1870,16 +1890,72 @@ unsigned int SOIL_direct_load_DDS(
 	return tex_ID;
 }
 
+int query_get_string_i_capability( void )
+{
+    if (has_get_string_i_capability == SOIL_CAPABILITY_UNKNOWN)
+    {
+        soilGlGetStringi = (P_SOIL_GETSTRINGIPROC)wglGetProcAddress("glGetStringi");
+
+        if (soilGlGetStringi == NULL)
+            has_get_string_i_capability = SOIL_CAPABILITY_NONE;
+        else
+            has_get_string_i_capability = SOIL_CAPABILITY_PRESENT;
+    }
+
+	return has_get_string_i_capability;
+}
+
+int soilIsExtensionSupported(const char *name)
+{
+    if (query_get_string_i_capability() == SOIL_CAPABILITY_PRESENT)
+    {
+        int i;
+        int n = 0; 
+        glGetIntegerv(SOIL_GL_NUM_EXTENSIONS, &n); 
+        for (i = 0; i < n; i++) 
+        { 
+            const char* extension = (const char*)soilGlGetStringi(GL_EXTENSIONS, i);
+            if (!strcmp(name, extension)) 
+            {
+                return 1;
+            }
+        }
+        return 0;
+    } 
+
+    // use old functionality:
+    return NULL != strstr( (char const*)glGetString( GL_EXTENSIONS ), name);
+}
+
+void *soilLoadProcAddr(const char *procName)
+{
+    #ifdef WIN32
+		return wglGetProcAddress(procName);
+	#elif defined(__APPLE__) || defined(__APPLE_CC__)
+		/*	I can't test this Apple stuff!	*/
+        /* obtained from: http://developer.apple.com/library/mac/documentation/GraphicsImaging/Conceptual/OpenGL-MacProgGuide/opengl_entrypts/opengl_entrypts.html */
+	    NSSymbol symbol;
+        char *symbolName;
+        symbolName = malloc (strlen (name) + 2); // 1
+        strcpy(symbolName + 1, name); // 2
+        symbolName[0] = '_'; // 3
+        symbol = NULL;
+        if (NSIsSymbolNameDefined (symbolName)) // 4
+            symbol = NSLookupAndBindSymbol (symbolName);
+        free (symbolName); // 5
+        return symbol ? NSAddressOfSymbol (symbol) : NULL; 
+	#else   // linux:
+		return glXGetProcAddressARB(procName);
+	#endif   
+}
+
 int query_NPOT_capability( void )
 {
 	/*	check for the capability	*/
 	if( has_NPOT_capability == SOIL_CAPABILITY_UNKNOWN )
 	{
 		/*	we haven't yet checked for the capability, do so	*/
-		if(
-			(NULL == strstr( (char const*)glGetString( GL_EXTENSIONS ),
-				"GL_ARB_texture_non_power_of_two" ) )
-			)
+		if(!soilIsExtensionSupported("GL_ARB_texture_non_power_of_two" ))
 		{
 			/*	not there, flag the failure	*/
 			has_NPOT_capability = SOIL_CAPABILITY_NONE;
@@ -1899,16 +1975,9 @@ int query_tex_rectangle_capability( void )
 	if( has_tex_rectangle_capability == SOIL_CAPABILITY_UNKNOWN )
 	{
 		/*	we haven't yet checked for the capability, do so	*/
-		if(
-			(NULL == strstr( (char const*)glGetString( GL_EXTENSIONS ),
-				"GL_ARB_texture_rectangle" ) )
-		&&
-			(NULL == strstr( (char const*)glGetString( GL_EXTENSIONS ),
-				"GL_EXT_texture_rectangle" ) )
-		&&
-			(NULL == strstr( (char const*)glGetString( GL_EXTENSIONS ),
-				"GL_NV_texture_rectangle" ) )
-			)
+		if(!soilIsExtensionSupported("GL_ARB_texture_rectangle" ) &&
+           !soilIsExtensionSupported("GL_EXT_texture_rectangle" ) &&
+           !soilIsExtensionSupported("GL_NV_texture_rectangle" ))
 		{
 			/*	not there, flag the failure	*/
 			has_tex_rectangle_capability = SOIL_CAPABILITY_NONE;
@@ -1928,13 +1997,8 @@ int query_cubemap_capability( void )
 	if( has_cubemap_capability == SOIL_CAPABILITY_UNKNOWN )
 	{
 		/*	we haven't yet checked for the capability, do so	*/
-		if(
-			(NULL == strstr( (char const*)glGetString( GL_EXTENSIONS ),
-				"GL_ARB_texture_cube_map" ) )
-		&&
-			(NULL == strstr( (char const*)glGetString( GL_EXTENSIONS ),
-				"GL_EXT_texture_cube_map" ) )
-			)
+		if(!soilIsExtensionSupported("GL_ARB_texture_cube_map") && 
+           !soilIsExtensionSupported("GL_EXT_texture_cube_map"))
 		{
 			/*	not there, flag the failure	*/
 			has_cubemap_capability = SOIL_CAPABILITY_NONE;
@@ -1954,53 +2018,15 @@ int query_DXT_capability( void )
 	if( has_DXT_capability == SOIL_CAPABILITY_UNKNOWN )
 	{
 		/*	we haven't yet checked for the capability, do so	*/
-		if( NULL == strstr(
-				(char const*)glGetString( GL_EXTENSIONS ),
-				"GL_EXT_texture_compression_s3tc" ) )
+		if(!soilIsExtensionSupported("GL_EXT_texture_compression_s3tc"))
 		{
 			/*	not there, flag the failure	*/
 			has_DXT_capability = SOIL_CAPABILITY_NONE;
 		} else
 		{
 			/*	and find the address of the extension function	*/
-			P_SOIL_GLCOMPRESSEDTEXIMAGE2DPROC ext_addr = NULL;
-			#ifdef WIN32
-				ext_addr = (P_SOIL_GLCOMPRESSEDTEXIMAGE2DPROC)
-						wglGetProcAddress
-						(
-							"glCompressedTexImage2DARB"
-						);
-			#elif defined(__APPLE__) || defined(__APPLE_CC__)
-				/*	I can't test this Apple stuff!	*/
-				CFBundleRef bundle;
-				CFURLRef bundleURL =
-					CFURLCreateWithFileSystemPath(
-						kCFAllocatorDefault,
-						CFSTR("/System/Library/Frameworks/OpenGL.framework"),
-						kCFURLPOSIXPathStyle,
-						true );
-				CFStringRef extensionName =
-					CFStringCreateWithCString(
-						kCFAllocatorDefault,
-						"glCompressedTexImage2DARB",
-						kCFStringEncodingASCII );
-				bundle = CFBundleCreate( kCFAllocatorDefault, bundleURL );
-				assert( bundle != NULL );
-				ext_addr = (P_SOIL_GLCOMPRESSEDTEXIMAGE2DPROC)
-						CFBundleGetFunctionPointerForName
-						(
-							bundle, extensionName
-						);
-				CFRelease( bundleURL );
-				CFRelease( extensionName );
-				CFRelease( bundle );
-			#else
-				ext_addr = (P_SOIL_GLCOMPRESSEDTEXIMAGE2DPROC)
-						glXGetProcAddressARB
-						(
-							(const GLubyte *)"glCompressedTexImage2DARB"
-						);
-			#endif
+            P_SOIL_GLCOMPRESSEDTEXIMAGE2DPROC ext_addr = (P_SOIL_GLCOMPRESSEDTEXIMAGE2DPROC)soilLoadProcAddr("glCompressedTexImage2DARB");
+			
 			/*	Flag it so no checks needed later	*/
 			if( NULL == ext_addr )
 			{
@@ -2021,4 +2047,34 @@ int query_DXT_capability( void )
 	}
 	/*	let the user know if we can do DXT or not	*/
 	return has_DXT_capability;
+}
+
+int query_gen_mipmap_capability( void )
+{
+	/*	check for the capability	*/
+	if( has_gen_mipmap_capability == SOIL_CAPABILITY_UNKNOWN )
+	{
+		/*	we haven't yet checked for the capability, do so	*/
+        if(!soilIsExtensionSupported("GL_EXT_framebuffer_object"))
+		{
+			/*	not there, flag the failure	*/
+			has_gen_mipmap_capability = SOIL_CAPABILITY_NONE;
+		} else
+        {
+            P_SOIL_PFNGLGENERATEMIPMAPPROC ext_addr = (P_SOIL_PFNGLGENERATEMIPMAPPROC)soilLoadProcAddr("glGenerateMipmapEXT");
+
+		    if(ext_addr != NULL)
+		    {
+			    /*	not there, flag the failure	*/
+			    has_gen_mipmap_capability = SOIL_CAPABILITY_NONE;
+		    } else
+		    {
+			    /*	it's there!	*/
+			    has_gen_mipmap_capability = SOIL_CAPABILITY_PRESENT;
+                soilGlGenerateMipmap = ext_addr;
+		    }
+        }
+	}
+	/*	let the user know if we can do cubemaps or not	*/
+	return has_gen_mipmap_capability;
 }
