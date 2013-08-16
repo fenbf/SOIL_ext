@@ -3,16 +3,17 @@
 
 The **Ext** version contains the following changes:
 
-* *[in progress]* Added option to use immutable texture storage
+* **[in progress]** Added option to use immutable texture storage
  * When possible (when extension is supported) library can create texture using glTextureStorage and then glTexSubImage
  * See more here [OpenGL wiki](http://www.opengl.org/wiki/Texture_Storage)
-* *[in progress]* Mipmap generation using glGenerateMipmap
+* **[in progress]** Mipmap generation using glGenerateMipmap
  * Original library scaled image to be POT and then used custom procedure to generate mipmaps.
  * This change use glGenerateMipmap (if this extension is available)
-* *[done]* Using only Modern OpenGL functionalities
+* **[done]** upgraded to the version **1.33** of [stb_image](http://www.nothings.org/stb_image.c)
+* **[done]** Using only Modern OpenGL functionalities (when possible)
  * *CLAMP\_TO\_EDGE* instead of *GL\_CLAMP*
- *  *glGetStringi* instead of *glGetString(GL\_EXTENSIONS)*
-* *[done]* Visual Studio 2012 Express solution
+ *  *glGetStringi* instead of *glGetString(GL\_EXTENSIONS)* 
+* **[done]** Visual Studio 2012 Express solution
  * It compiles without any warnings: used *\_CRT_SECURE_NO_WARNINGS* and several code changes regarding *int/float* cast and *signed/unsigned* comparisons.
 
 ###Notes###

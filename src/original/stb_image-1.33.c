@@ -61,7 +61,277 @@
 
 */
 
-#include "stb_image_aug.h"
+#ifndef STBI_INCLUDE_STB_IMAGE_H
+#define STBI_INCLUDE_STB_IMAGE_H
+
+// To get a header file for this, either cut and paste the header,
+// or create stb_image.h, #define STBI_HEADER_FILE_ONLY, and
+// then include stb_image.c from it.
+
+////   begin header file  ////////////////////////////////////////////////////
+//
+// Limitations:
+//    - no jpeg progressive support
+//    - non-HDR formats support 8-bit samples only (jpeg, png)
+//    - no delayed line count (jpeg) -- IJG doesn't support either
+//    - no 1-bit BMP
+//    - GIF always returns *comp=4
+//
+// Basic usage (see HDR discussion below):
+//    int x,y,n;
+//    unsigned char *data = stbi_load(filename, &x, &y, &n, 0);
+//    // ... process data if not NULL ... 
+//    // ... x = width, y = height, n = # 8-bit components per pixel ...
+//    // ... replace '0' with '1'..'4' to force that many components per pixel
+//    // ... but 'n' will always be the number that it would have been if you said 0
+//    stbi_image_free(data)
+//
+// Standard parameters:
+//    int *x       -- outputs image width in pixels
+//    int *y       -- outputs image height in pixels
+//    int *comp    -- outputs # of image components in image file
+//    int req_comp -- if non-zero, # of image components requested in result
+//
+// The return value from an image loader is an 'unsigned char *' which points
+// to the pixel data. The pixel data consists of *y scanlines of *x pixels,
+// with each pixel consisting of N interleaved 8-bit components; the first
+// pixel pointed to is top-left-most in the image. There is no padding between
+// image scanlines or between pixels, regardless of format. The number of
+// components N is 'req_comp' if req_comp is non-zero, or *comp otherwise.
+// If req_comp is non-zero, *comp has the number of components that _would_
+// have been output otherwise. E.g. if you set req_comp to 4, you will always
+// get RGBA output, but you can check *comp to easily see if it's opaque.
+//
+// An output image with N components has the following components interleaved
+// in this order in each pixel:
+//
+//     N=#comp     components
+//       1           grey
+//       2           grey, alpha
+//       3           red, green, blue
+//       4           red, green, blue, alpha
+//
+// If image loading fails for any reason, the return value will be NULL,
+// and *x, *y, *comp will be unchanged. The function stbi_failure_reason()
+// can be queried for an extremely brief, end-user unfriendly explanation
+// of why the load failed. Define STBI_NO_FAILURE_STRINGS to avoid
+// compiling these strings at all, and STBI_FAILURE_USERMSG to get slightly
+// more user-friendly ones.
+//
+// Paletted PNG, BMP, GIF, and PIC images are automatically depalettized.
+//
+// ===========================================================================
+//
+// iPhone PNG support:
+//
+// By default we convert iphone-formatted PNGs back to RGB; nominally they
+// would silently load as BGR, except the existing code should have just
+// failed on such iPhone PNGs. But you can disable this conversion by
+// by calling stbi_convert_iphone_png_to_rgb(0), in which case
+// you will always just get the native iphone "format" through.
+//
+// Call stbi_set_unpremultiply_on_load(1) as well to force a divide per
+// pixel to remove any premultiplied alpha *only* if the image file explicitly
+// says there's premultiplied data (currently only happens in iPhone images,
+// and only if iPhone convert-to-rgb processing is on).
+//
+// ===========================================================================
+//
+// HDR image support   (disable by defining STBI_NO_HDR)
+//
+// stb_image now supports loading HDR images in general, and currently
+// the Radiance .HDR file format, although the support is provided
+// generically. You can still load any file through the existing interface;
+// if you attempt to load an HDR file, it will be automatically remapped to
+// LDR, assuming gamma 2.2 and an arbitrary scale factor defaulting to 1;
+// both of these constants can be reconfigured through this interface:
+//
+//     stbi_hdr_to_ldr_gamma(2.2f);
+//     stbi_hdr_to_ldr_scale(1.0f);
+//
+// (note, do not use _inverse_ constants; stbi_image will invert them
+// appropriately).
+//
+// Additionally, there is a new, parallel interface for loading files as
+// (linear) floats to preserve the full dynamic range:
+//
+//    float *data = stbi_loadf(filename, &x, &y, &n, 0);
+// 
+// If you load LDR images through this interface, those images will
+// be promoted to floating point values, run through the inverse of
+// constants corresponding to the above:
+//
+//     stbi_ldr_to_hdr_scale(1.0f);
+//     stbi_ldr_to_hdr_gamma(2.2f);
+//
+// Finally, given a filename (or an open file or memory block--see header
+// file for details) containing image data, you can query for the "most
+// appropriate" interface to use (that is, whether the image is HDR or
+// not), using:
+//
+//     stbi_is_hdr(char *filename);
+//
+// ===========================================================================
+//
+// I/O callbacks
+//
+// I/O callbacks allow you to read from arbitrary sources, like packaged
+// files or some other source. Data read from callbacks are processed
+// through a small internal buffer (currently 128 bytes) to try to reduce
+// overhead. 
+//
+// The three functions you must define are "read" (reads some bytes of data),
+// "skip" (skips some bytes of data), "eof" (reports if the stream is at the end).
+
+
+#ifndef STBI_NO_STDIO
+
+#if defined(_MSC_VER) && _MSC_VER >= 0x1400
+#define _CRT_SECURE_NO_WARNINGS // suppress bogus warnings about fopen()
+#endif
+
+#include <stdio.h>
+#endif
+
+#define STBI_VERSION 1
+
+enum
+{
+   STBI_default = 0, // only used for req_comp
+
+   STBI_grey       = 1,
+   STBI_grey_alpha = 2,
+   STBI_rgb        = 3,
+   STBI_rgb_alpha  = 4
+};
+
+typedef unsigned char stbi_uc;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// PRIMARY API - works on images of any type
+//
+
+//
+// load image by filename, open file, or memory buffer
+//
+
+extern stbi_uc *stbi_load_from_memory(stbi_uc const *buffer, int len, int *x, int *y, int *comp, int req_comp);
+
+#ifndef STBI_NO_STDIO
+extern stbi_uc *stbi_load            (char const *filename,     int *x, int *y, int *comp, int req_comp);
+extern stbi_uc *stbi_load_from_file  (FILE *f,                  int *x, int *y, int *comp, int req_comp);
+// for stbi_load_from_file, file pointer is left pointing immediately after image
+#endif
+
+typedef struct
+{
+   int      (*read)  (void *user,char *data,int size);   // fill 'data' with 'size' bytes.  return number of bytes actually read 
+   void     (*skip)  (void *user,unsigned n);            // skip the next 'n' bytes
+   int      (*eof)   (void *user);                       // returns nonzero if we are at end of file/data
+} stbi_io_callbacks;
+
+extern stbi_uc *stbi_load_from_callbacks  (stbi_io_callbacks const *clbk, void *user, int *x, int *y, int *comp, int req_comp);
+
+#ifndef STBI_NO_HDR
+   extern float *stbi_loadf_from_memory(stbi_uc const *buffer, int len, int *x, int *y, int *comp, int req_comp);
+
+   #ifndef STBI_NO_STDIO
+   extern float *stbi_loadf            (char const *filename,   int *x, int *y, int *comp, int req_comp);
+   extern float *stbi_loadf_from_file  (FILE *f,                int *x, int *y, int *comp, int req_comp);
+   #endif
+   
+   extern float *stbi_loadf_from_callbacks  (stbi_io_callbacks const *clbk, void *user, int *x, int *y, int *comp, int req_comp);
+
+   extern void   stbi_hdr_to_ldr_gamma(float gamma);
+   extern void   stbi_hdr_to_ldr_scale(float scale);
+
+   extern void   stbi_ldr_to_hdr_gamma(float gamma);
+   extern void   stbi_ldr_to_hdr_scale(float scale);
+#endif // STBI_NO_HDR
+
+// stbi_is_hdr is always defined
+extern int    stbi_is_hdr_from_callbacks(stbi_io_callbacks const *clbk, void *user);
+extern int    stbi_is_hdr_from_memory(stbi_uc const *buffer, int len);
+#ifndef STBI_NO_STDIO
+extern int      stbi_is_hdr          (char const *filename);
+extern int      stbi_is_hdr_from_file(FILE *f);
+#endif // STBI_NO_STDIO
+
+
+// get a VERY brief reason for failure
+// NOT THREADSAFE
+extern const char *stbi_failure_reason  (void); 
+
+// free the loaded image -- this is just free()
+extern void     stbi_image_free      (void *retval_from_stbi_load);
+
+// get image dimensions & components without fully decoding
+extern int      stbi_info_from_memory(stbi_uc const *buffer, int len, int *x, int *y, int *comp);
+extern int      stbi_info_from_callbacks(stbi_io_callbacks const *clbk, void *user, int *x, int *y, int *comp);
+
+#ifndef STBI_NO_STDIO
+extern int      stbi_info            (char const *filename,     int *x, int *y, int *comp);
+extern int      stbi_info_from_file  (FILE *f,                  int *x, int *y, int *comp);
+
+#endif
+
+
+
+// for image formats that explicitly notate that they have premultiplied alpha,
+// we just return the colors as stored in the file. set this flag to force
+// unpremultiplication. results are undefined if the unpremultiply overflow.
+extern void stbi_set_unpremultiply_on_load(int flag_true_if_should_unpremultiply);
+
+// indicate whether we should process iphone images back to canonical format,
+// or just pass them through "as-is"
+extern void stbi_convert_iphone_png_to_rgb(int flag_true_if_should_convert);
+
+
+// ZLIB client - used by PNG, available for other purposes
+
+extern char *stbi_zlib_decode_malloc_guesssize(const char *buffer, int len, int initial_size, int *outlen);
+extern char *stbi_zlib_decode_malloc(const char *buffer, int len, int *outlen);
+extern int   stbi_zlib_decode_buffer(char *obuffer, int olen, const char *ibuffer, int ilen);
+
+extern char *stbi_zlib_decode_noheader_malloc(const char *buffer, int len, int *outlen);
+extern int   stbi_zlib_decode_noheader_buffer(char *obuffer, int olen, const char *ibuffer, int ilen);
+
+
+// define faster low-level operations (typically SIMD support)
+#ifdef STBI_SIMD
+typedef void (*stbi_idct_8x8)(stbi_uc *out, int out_stride, short data[64], unsigned short *dequantize);
+// compute an integer IDCT on "input"
+//     input[x] = data[x] * dequantize[x]
+//     write results to 'out': 64 samples, each run of 8 spaced by 'out_stride'
+//                             CLAMP results to 0..255
+typedef void (*stbi_YCbCr_to_RGB_run)(stbi_uc *output, stbi_uc const  *y, stbi_uc const *cb, stbi_uc const *cr, int count, int step);
+// compute a conversion from YCbCr to RGB
+//     'count' pixels
+//     write pixels to 'output'; each pixel is 'step' bytes (either 3 or 4; if 4, write '255' as 4th), order R,G,B
+//     y: Y input channel
+//     cb: Cb input channel; scale/biased to be 0..255
+//     cr: Cr input channel; scale/biased to be 0..255
+
+extern void stbi_install_idct(stbi_idct_8x8 func);
+extern void stbi_install_YCbCr_to_RGB(stbi_YCbCr_to_RGB_run func);
+#endif // STBI_SIMD
+
+
+#ifdef __cplusplus
+}
+#endif
+
+//
+//
+////   end header file   /////////////////////////////////////////////////////
+#endif // STBI_INCLUDE_STB_IMAGE_H
+
+#ifndef STBI_HEADER_FILE_ONLY
 
 #ifndef STBI_NO_HDR
 #include <math.h>  // ldexp
@@ -101,15 +371,6 @@ typedef unsigned char validate_uint32[sizeof(uint32)==4 ? 1 : -1];
 #if defined(STBI_NO_STDIO) && !defined(STBI_NO_WRITE)
 #define STBI_NO_WRITE
 #endif
-
-// bf: from original stb_image_aug.c
-#ifndef STBI_NO_DDS
-#include "stbi_DDS_aug.h"
-#endif
-// :bf
-
-//	I (JLD) want full messages for SOIL
-#define STBI_FAILURE_USERMSG 1
 
 #define STBI_NOTUSED(v)  (void)sizeof(v)
 
@@ -234,9 +495,9 @@ static int      stbi_gif_info(stbi *s, int *x, int *y, int *comp);
 // this is not threadsafe
 static const char *failure_reason;
 
-char *stbi_failure_reason(void)
+const char *stbi_failure_reason(void)
 {
-   return (char *)failure_reason;
+   return failure_reason;
 }
 
 static int e(const char *str)
@@ -4112,113 +4373,6 @@ static float *hdr_load(stbi *s, int *x, int *y, int *comp, int req_comp)
    return hdr_data;
 }
 
-static stbi_uc *hdr_load_rgbe(stbi *s, int *x, int *y, int *comp, int req_comp)
-{
-   char buffer[HDR_BUFLEN];
-	char *token;
-	int valid = 0;
-	int width, height;
-   stbi_uc *scanline;
-	stbi_uc *rgbe_data;
-	int len;
-	unsigned char count, value;
-	int i, j, k, c1,c2, z;
-
-
-	// Check identifier
-	if (strcmp(hdr_gettoken(s,buffer), "#?RADIANCE") != 0)
-		return epuc("not HDR", "Corrupt HDR image");
-
-	// Parse header
-	while(1) {
-		token = hdr_gettoken(s,buffer);
-      if (token[0] == 0) break;
-		if (strcmp(token, "FORMAT=32-bit_rle_rgbe") == 0) valid = 1;
-   }
-
-	if (!valid)    return epuc("unsupported format", "Unsupported HDR format");
-
-   // Parse width and height
-   // can't use sscanf() if we're not using stdio!
-   token = hdr_gettoken(s,buffer);
-   if (strncmp(token, "-Y ", 3))  return epuc("unsupported data layout", "Unsupported HDR format");
-   token += 3;
-   height = strtol(token, &token, 10);
-   while (*token == ' ') ++token;
-   if (strncmp(token, "+X ", 3))  return epuc("unsupported data layout", "Unsupported HDR format");
-   token += 3;
-   width = strtol(token, NULL, 10);
-
-	*x = width;
-	*y = height;
-
-	// RGBE _MUST_ come out as 4 components
-   *comp = 4;
-	req_comp = 4;
-
-	// Read data
-	rgbe_data = (stbi_uc *) malloc(height * width * req_comp * sizeof(stbi_uc));
-	//	point to the beginning
-	scanline = rgbe_data;
-
-	// Load image data
-   // image data is stored as some number of scan lines
-	if( width < 8 || width >= 32768) {
-		// Read flat data
-      for (j=0; j < height; ++j) {
-         for (i=0; i < width; ++i) {
-           main_decode_loop:
-            //getn(rgbe, 4);
-            getn(s,scanline, 4);
-			scanline += 4;
-         }
-      }
-	} else {
-		// Read RLE-encoded data
-		for (j = 0; j < height; ++j) {
-         c1 = get8(s);
-         c2 = get8(s);
-         len = get8(s);
-         if (c1 != 2 || c2 != 2 || (len & 0x80)) {
-            // not run-length encoded, so we have to actually use THIS data as a decoded
-            // pixel (note this can't be a valid pixel--one of RGB must be >= 128)
-            scanline[0] = c1;
-            scanline[1] = c2;
-            scanline[2] = len;
-            scanline[3] = get8(s);
-            scanline += 4;
-            i = 1;
-            j = 0;
-            goto main_decode_loop; // yes, this is insane; blame the insane format
-         }
-         len <<= 8;
-         len |= get8(s);
-         if (len != width) { free(rgbe_data); return epuc("invalid decoded scanline length", "corrupt HDR"); }
-			for (k = 0; k < 4; ++k) {
-				i = 0;
-				while (i < width) {
-					count = get8(s);
-					if (count > 128) {
-						// Run
-						value = get8(s);
-                  count -= 128;
-						for (z = 0; z < count; ++z)
-							scanline[i++ * 4 + k] = value;
-					} else {
-						// Dump
-						for (z = 0; z < count; ++z)
-							scanline[i++ * 4 + k] = get8(s);
-					}
-				}
-			}
-			//	move the scanline on
-			scanline += 4 * width;
-		}
-	}
-
-   return rgbe_data;
-}
-
 static float *stbi_hdr_load(stbi *s, int *x, int *y, int *comp, int req_comp)
 {
    return hdr_load(s,x,y,comp,req_comp);
@@ -4262,33 +4416,6 @@ static int stbi_hdr_info(stbi *s, int *x, int *y, int *comp)
    *comp = 3;
    return 1;
 }
-
-#ifndef STBI_NO_STDIO
-stbi_uc *stbi_hdr_load_rgbe_file(FILE *f, int *x, int *y, int *comp, int req_comp)
-{
-   stbi s;
-   start_file(&s,f);
-   return hdr_load_rgbe(&s,x,y,comp,req_comp);
-}
-
-stbi_uc *stbi_hdr_load_rgbe        (char const *filename,           int *x, int *y, int *comp, int req_comp)
-{
-   FILE *f = fopen(filename, "rb");
-   unsigned char *result;
-   if (!f) return epuc("can't fopen", "Unable to open file");
-   result = stbi_hdr_load_rgbe_file(f,x,y,comp,req_comp);
-   fclose(f);
-   return result;
-}
-#endif  // #ifndef STBI_NO_STDIO
-
-stbi_uc *stbi_hdr_load_rgbe_memory(stbi_uc *buffer, int len, int *x, int *y, int *comp, int req_comp)
-{
-   stbi s;
-   start_mem(&s,buffer, len);
-   return hdr_load_rgbe(&s,x,y,comp,req_comp);
-}
-
 #endif // STBI_NO_HDR
 
 static int stbi_bmp_info(stbi *s, int *x, int *y, int *comp)
@@ -4456,115 +4583,8 @@ int stbi_info_from_callbacks(stbi_io_callbacks const *c, void *user, int *x, int
    return stbi_info_main(&s,x,y,comp);
 }
 
-/////////////////////// write image ///////////////////////
+#endif // STBI_HEADER_FILE_ONLY
 
-#ifndef STBI_NO_WRITE
-
-static void write8(FILE *f, int x) { uint8 z = (uint8) x; fwrite(&z,1,1,f); }
-
-static void writefv(FILE *f, char *fmt, va_list v)
-{
-   while (*fmt) {
-      switch (*fmt++) {
-         case ' ': break;
-         case '1': { uint8 x = va_arg(v, int); write8(f,x); break; }
-         case '2': { int16 x = va_arg(v, int); write8(f,x); write8(f,x>>8); break; }
-         case '4': { int32 x = va_arg(v, int); write8(f,x); write8(f,x>>8); write8(f,x>>16); write8(f,x>>24); break; }
-         default:
-            assert(0);
-            va_end(v);
-            return;
-      }
-   }
-}
-
-static void writef(FILE *f, char *fmt, ...)
-{
-   va_list v;
-   va_start(v, fmt);
-   writefv(f,fmt,v);
-   va_end(v);
-}
-
-static void write_pixels(FILE *f, int rgb_dir, int vdir, int x, int y, int comp, void *data, int write_alpha, int scanline_pad)
-{
-   uint8 bg[3] = { 255, 0, 255}, px[3];
-   uint32 zero = 0;
-   int i,j,k, j_end;
-
-   if (vdir < 0)
-      j_end = -1, j = y-1;
-   else
-      j_end =  y, j = 0;
-
-   for (; j != j_end; j += vdir) {
-      for (i=0; i < x; ++i) {
-         uint8 *d = (uint8 *) data + (j*x+i)*comp;
-         if (write_alpha < 0)
-            fwrite(&d[comp-1], 1, 1, f);
-         switch (comp) {
-            case 1:
-            case 2: writef(f, "111", d[0],d[0],d[0]);
-                    break;
-            case 4:
-               if (!write_alpha) {
-                  for (k=0; k < 3; ++k)
-                     px[k] = bg[k] + ((d[k] - bg[k]) * d[3])/255;
-                  writef(f, "111", px[1-rgb_dir],px[1],px[1+rgb_dir]);
-                  break;
-               }
-               /* FALLTHROUGH */
-            case 3:
-               writef(f, "111", d[1-rgb_dir],d[1],d[1+rgb_dir]);
-               break;
-         }
-         if (write_alpha > 0)
-            fwrite(&d[comp-1], 1, 1, f);
-      }
-      fwrite(&zero,scanline_pad,1,f);
-   }
-}
-
-static int outfile(char const *filename, int rgb_dir, int vdir, int x, int y, int comp, void *data, int alpha, int pad, char *fmt, ...)
-{
-   FILE *f = fopen(filename, "wb");
-   if (f) {
-      va_list v;
-      va_start(v, fmt);
-      writefv(f, fmt, v);
-      va_end(v);
-      write_pixels(f,rgb_dir,vdir,x,y,comp,data,alpha,pad);
-      fclose(f);
-   }
-   return f != NULL;
-}
-
-int stbi_write_bmp(char const *filename, int x, int y, int comp, void *data)
-{
-   int pad = (-x*3) & 3;
-   return outfile(filename,-1,-1,x,y,comp,data,0,pad,
-           "11 4 22 4" "4 44 22 444444",
-           'B', 'M', 14+40+(x*3+pad)*y, 0,0, 14+40,  // file header
-            40, x,y, 1,24, 0,0,0,0,0,0);             // bitmap header
-}
-
-int stbi_write_tga(char const *filename, int x, int y, int comp, void *data)
-{
-   int has_alpha = !(comp & 1);
-   return outfile(filename, -1,-1, x, y, comp, data, has_alpha, 0,
-                  "111 221 2222 11", 0,0,2, 0,0,0, 0,0,x,y, 24+8*has_alpha, 8*has_alpha);
-}
-
-// any other image formats that do interleaved rgb data?
-//    PNG: requires adler32,crc32 -- significant amount of code
-//    PSD: no, channels output separately
-//    TIFF: no, stripwise-interleaved... i think
-
-#endif // STBI_NO_WRITE
-
-#ifndef STBI_NO_DDS
-    #include "stbi_DDS_aug_c.h"
-#endif
 /*
    revision history:
       1.33 (2011-07-14)
