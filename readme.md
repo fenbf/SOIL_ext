@@ -7,9 +7,10 @@ The **Ext** version contains the following changes:
  * When possible (when extension is supported) library can create texture using glTextureStorage and then glTexSubImage
  * See more here [OpenGL wiki](http://www.opengl.org/wiki/Texture_Storage)
 * **[in progress]** Mipmap generation using glGenerateMipmap
- * Original library scaled image to be POT and then used custom procedure to generate mipmaps.
- * This change use glGenerateMipmap (if this extension is available)
+ * Original library scaled image to be POT and then used custom procedure to generate mipmaps. This can take some time.
+ * This change use glGenerateMipmapEXT (if this extension is available)
 * **[done]** upgraded to the version **1.33** of [stb_image](http://www.nothings.org/stb_image.c)
+ * stb_image_write.c/.h were created. Those files contain missing functionality that was cut from the newer version of stbi (cut in 1.22)  
 * **[done]** Using only Modern OpenGL functionalities (when possible)
  * *CLAMP\_TO\_EDGE* instead of *GL\_CLAMP*
  *  *glGetStringi* instead of *glGetString(GL\_EXTENSIONS)* 

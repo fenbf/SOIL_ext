@@ -61,8 +61,8 @@
 
 */
 
-#ifndef STBI_INCLUDE_STB_IMAGE_H
-#define STBI_INCLUDE_STB_IMAGE_H
+#ifndef STBI_INCLUDE_STB_IMAGE_AUG_H
+#define STBI_INCLUDE_STB_IMAGE_AUG_H
 
 // To get a header file for this, either cut and paste the header,
 // or create stb_image.h, #define STBI_HEADER_FILE_ONLY, and
@@ -211,16 +211,6 @@ typedef unsigned char stbi_uc;
 extern "C" {
 #endif
 
-// WRITING API
-
-#if !defined(STBI_NO_WRITE) && !defined(STBI_NO_STDIO)
-// write a BMP/TGA file given tightly packed 'comp' channels (no padding, nor bmp-stride-padding)
-// (you must include the appropriate extension in the filename).
-// returns TRUE on success, FALSE if couldn't open file, error writing file
-extern int      stbi_write_bmp       (char const *filename,     int x, int y, int comp, void *data);
-extern int      stbi_write_tga       (char const *filename,     int x, int y, int comp, void *data);
-#endif
-
 //////////////////////////////////////////////////////////////////////////////
 //
 // PRIMARY API - works on images of any type
@@ -342,4 +332,4 @@ extern void stbi_install_YCbCr_to_RGB(stbi_YCbCr_to_RGB_run func);
 //
 //
 ////   end header file   /////////////////////////////////////////////////////
-#endif // STBI_INCLUDE_STB_IMAGE_H
+#endif // STBI_INCLUDE_STB_IMAGE_AUG_H

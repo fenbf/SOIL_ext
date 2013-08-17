@@ -154,6 +154,7 @@
     <ClCompile Include="..\..\src\image_helper.c" />
     <ClCompile Include="..\..\src\SOIL.c" />
     <ClCompile Include="..\..\src\stb_image_aug.c" />
+    <ClCompile Include="..\..\src\stb_image_write.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\image_DXT.h" />
@@ -162,6 +163,7 @@
     <ClInclude Include="..\..\src\stb_image_aug.h" />
     <ClInclude Include="..\..\src\stbi_DDS_aug.h" />
     <ClInclude Include="..\..\src\stbi_DDS_aug_c.h" />
+    <ClInclude Include="..\..\src\stb_image_write.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

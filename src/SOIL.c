@@ -33,6 +33,7 @@
 
 #include "SOIL.h"
 #include "stb_image_aug.h"
+#include "stb_image_write.h"
 #include "image_helper.h"
 #include "image_DXT.h"
 
@@ -76,14 +77,17 @@ int query_cubemap_capability( void );
 #define SOIL_TEXTURE_CUBE_MAP_NEGATIVE_Z	0x851A
 #define SOIL_PROXY_TEXTURE_CUBE_MAP			0x851B
 #define SOIL_MAX_CUBE_MAP_TEXTURE_SIZE		0x851C
+
 /*	for non-power-of-two texture	*/
 static int has_NPOT_capability = SOIL_CAPABILITY_UNKNOWN;
 int query_NPOT_capability( void );
+
 /*	for texture rectangles	*/
 static int has_tex_rectangle_capability = SOIL_CAPABILITY_UNKNOWN;
 int query_tex_rectangle_capability( void );
 #define SOIL_TEXTURE_RECTANGLE_ARB				0x84F5
 #define SOIL_MAX_RECTANGLE_TEXTURE_SIZE_ARB		0x84F8
+
 /*	for using DXT compression	*/
 static int has_DXT_capability = SOIL_CAPABILITY_UNKNOWN;
 int query_DXT_capability( void );
@@ -111,6 +115,7 @@ unsigned int SOIL_direct_load_DDS_from_memory(
 		unsigned int reuse_texture_ID,
 		int flags,
 		int loading_as_cubemap );
+
 /*	other functions	*/
 unsigned int
 	SOIL_internal_create_OGL_texture
@@ -997,6 +1002,87 @@ void check_for_GL_errors( const char *calling_location )
 }
 #endif
 
+// bf: extracted function for mipmap generation
+static void createMipmaps(const unsigned char *const img,
+		int width, int height, int channels,
+		unsigned int flags,
+		unsigned int opengl_texture_type,
+		unsigned int opengl_texture_target,
+        unsigned int internal_texture_format, 
+        unsigned int original_texture_format,
+        int DXT_mode)
+{
+    if ((flags & SOIL_FLAG_GL_MIPMAPS) && query_gen_mipmap_capability() == SOIL_CAPABILITY_PRESENT)
+    {
+        soilGlGenerateMipmap(opengl_texture_target);
+    }
+    else
+    {
+        int MIPlevel = 1;
+        int MIPwidth = (width+1) / 2;
+        int MIPheight = (height+1) / 2;
+
+        unsigned char *resampled = (unsigned char*)malloc( channels*MIPwidth*MIPheight );
+
+	    while( ((1<<MIPlevel) <= width) || ((1<<MIPlevel) <= height) )
+	    {
+		    /*	do this MIPmap level	*/
+		    mipmap_image(
+				    img, width, height, channels,
+				    resampled,
+				    (1 << MIPlevel), (1 << MIPlevel) );
+		    /*  upload the MIPmaps	*/
+		    if( DXT_mode == SOIL_CAPABILITY_PRESENT )
+		    {
+			    /*	user wants me to do the DXT conversion!	*/
+			    int DDS_size;
+			    unsigned char *DDS_data = NULL;
+			    if( (channels & 1) == 1 )
+			    {
+				    /*	RGB, use DXT1	*/
+				    DDS_data = convert_image_to_DXT1(
+						    resampled, MIPwidth, MIPheight, channels, &DDS_size );
+			    } else
+			    {
+				    /*	RGBA, use DXT5	*/
+				    DDS_data = convert_image_to_DXT5(
+						    resampled, MIPwidth, MIPheight, channels, &DDS_size );
+			    }
+			    if( DDS_data )
+			    {
+				    soilGlCompressedTexImage2D(
+					    opengl_texture_target, MIPlevel,
+					    internal_texture_format, MIPwidth, MIPheight, 0,
+					    DDS_size, DDS_data );
+				    check_for_GL_errors( "glCompressedTexImage2D" );
+				    SOIL_free_image_data( DDS_data );
+			    } else
+			    {
+				    /*	my compression failed, try the OpenGL driver's version	*/
+				    glTexImage2D(
+					    opengl_texture_target, MIPlevel,
+					    internal_texture_format, MIPwidth, MIPheight, 0,
+					    original_texture_format, GL_UNSIGNED_BYTE, resampled );
+				    check_for_GL_errors( "glTexImage2D" );
+			    }
+		    } else
+		    {
+			    /*	user want OpenGL to do all the work!	*/
+			    glTexImage2D(
+				    opengl_texture_target, MIPlevel,
+				    internal_texture_format, MIPwidth, MIPheight, 0,
+				    original_texture_format, GL_UNSIGNED_BYTE, resampled );
+			    check_for_GL_errors( "glTexImage2D" );
+		    }
+		    /*	prep for the next level	*/
+		    ++MIPlevel;
+		    MIPwidth = (MIPwidth + 1) / 2;
+		    MIPheight = (MIPheight + 1) / 2;
+	    }
+	    SOIL_free_image_data( resampled );
+    }
+}
+
 unsigned int
 	SOIL_internal_create_OGL_texture
 	(
@@ -1015,6 +1101,7 @@ unsigned int
 	unsigned int internal_texture_format = 0, original_texture_format = 0;
 	int DXT_mode = SOIL_CAPABILITY_UNKNOWN;
 	int max_supported_size;
+
 	/*	If the user wants to use the texture rectangle I kill a few flags	*/
 	if( flags & SOIL_FLAG_TEXTURE_RECTANGLE )
 	{
@@ -1276,68 +1363,10 @@ unsigned int
 			/*printf( "OpenGL DXT compressor\n" );	*/
 		}
 		/*	are any MIPmaps desired?	*/
-		if( flags & SOIL_FLAG_MIPMAPS )
+        if( flags & SOIL_FLAG_MIPMAPS || flags & SOIL_FLAG_GL_MIPMAPS)
 		{
-			int MIPlevel = 1;
-			int MIPwidth = (width+1) / 2;
-			int MIPheight = (height+1) / 2;
-			unsigned char *resampled = (unsigned char*)malloc( channels*MIPwidth*MIPheight );
-			while( ((1<<MIPlevel) <= width) || ((1<<MIPlevel) <= height) )
-			{
-				/*	do this MIPmap level	*/
-				mipmap_image(
-						img, width, height, channels,
-						resampled,
-						(1 << MIPlevel), (1 << MIPlevel) );
-				/*  upload the MIPmaps	*/
-				if( DXT_mode == SOIL_CAPABILITY_PRESENT )
-				{
-					/*	user wants me to do the DXT conversion!	*/
-					int DDS_size;
-					unsigned char *DDS_data = NULL;
-					if( (channels & 1) == 1 )
-					{
-						/*	RGB, use DXT1	*/
-						DDS_data = convert_image_to_DXT1(
-								resampled, MIPwidth, MIPheight, channels, &DDS_size );
-					} else
-					{
-						/*	RGBA, use DXT5	*/
-						DDS_data = convert_image_to_DXT5(
-								resampled, MIPwidth, MIPheight, channels, &DDS_size );
-					}
-					if( DDS_data )
-					{
-						soilGlCompressedTexImage2D(
-							opengl_texture_target, MIPlevel,
-							internal_texture_format, MIPwidth, MIPheight, 0,
-							DDS_size, DDS_data );
-						check_for_GL_errors( "glCompressedTexImage2D" );
-						SOIL_free_image_data( DDS_data );
-					} else
-					{
-						/*	my compression failed, try the OpenGL driver's version	*/
-						glTexImage2D(
-							opengl_texture_target, MIPlevel,
-							internal_texture_format, MIPwidth, MIPheight, 0,
-							original_texture_format, GL_UNSIGNED_BYTE, resampled );
-						check_for_GL_errors( "glTexImage2D" );
-					}
-				} else
-				{
-					/*	user want OpenGL to do all the work!	*/
-					glTexImage2D(
-						opengl_texture_target, MIPlevel,
-						internal_texture_format, MIPwidth, MIPheight, 0,
-						original_texture_format, GL_UNSIGNED_BYTE, resampled );
-					check_for_GL_errors( "glTexImage2D" );
-				}
-				/*	prep for the next level	*/
-				++MIPlevel;
-				MIPwidth = (MIPwidth + 1) / 2;
-				MIPheight = (MIPheight + 1) / 2;
-			}
-			SOIL_free_image_data( resampled );
+            createMipmaps(img, width, height, channels, flags, opengl_texture_type, opengl_texture_target, internal_texture_format, original_texture_format, DXT_mode);
+
 			/*	instruct OpenGL to use the MIPmaps	*/
 			glTexParameteri( opengl_texture_type, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
 			glTexParameteri( opengl_texture_type, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR );
@@ -2063,7 +2092,7 @@ int query_gen_mipmap_capability( void )
         {
             P_SOIL_PFNGLGENERATEMIPMAPPROC ext_addr = (P_SOIL_PFNGLGENERATEMIPMAPPROC)soilLoadProcAddr("glGenerateMipmapEXT");
 
-		    if(ext_addr != NULL)
+		    if(ext_addr == NULL)
 		    {
 			    /*	not there, flag the failure	*/
 			    has_gen_mipmap_capability = SOIL_CAPABILITY_NONE;
