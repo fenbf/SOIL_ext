@@ -1,11 +1,13 @@
 #include <string>
 #include <iostream>
+#include <io.h>
 
 #include <windows.h>
 #include <shellapi.h>
+#include <ctime>
 #include <gl/gl.h>
-#include <gl/glext.h>
 
+#include "glext.h"
 #include "SOIL.h"
 
 LRESULT CALLBACK WindowProc(HWND, UINT, WPARAM, LPARAM);
@@ -17,6 +19,18 @@ int WINAPI WinMain(HINSTANCE hInstance,
                    LPSTR lpCmdLine,
                    int nCmdShow)
 {
+    BOOL ok = AllocConsole();
+    if (ok)
+    {
+        HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+        int fd = _open_osfhandle((intptr_t)h, 0);
+        FILE *fp = _fdopen( fd, "w" );
+        *stdout = *fp;
+        setvbuf( stdout, NULL, _IONBF, 0 );
+        fprintf(stdout, "Hello worldd\n");
+        SetConsoleTitle("VM Debug");
+    }
+
     WNDCLASSEX wcex;
     HWND hwnd;
     HDC hDC;
@@ -172,10 +186,10 @@ int WINAPI WinMain(HINSTANCE hInstance,
 					load_me.c_str(),
 					SOIL_LOAD_AUTO,
 					SOIL_CREATE_NEW_ID,
-					SOIL_FLAG_POWER_OF_TWO
-					| SOIL_FLAG_MIPMAPS
+					/*SOIL_FLAG_POWER_OF_TWO*/
+					SOIL_FLAG_GL_MIPMAPS
 					//| SOIL_FLAG_MULTIPLY_ALPHA
-					//| SOIL_FLAG_COMPRESS_TO_DXT
+					| SOIL_FLAG_COMPRESS_TO_DXT
 					| SOIL_FLAG_DDS_LOAD_DIRECT
 					//| SOIL_FLAG_NTSC_SAFE_RGB
 					//| SOIL_FLAG_CoCg_Y
@@ -224,7 +238,7 @@ int WINAPI WinMain(HINSTANCE hInstance,
         else
         {
             // OpenGL animation code goes here
-            theta = clock() * 0.1;
+            theta = clock() * 0.1f;
 
             float tex_u_max = 1.0f;//0.2f;
             float tex_v_max = 1.0f;//0.2f;

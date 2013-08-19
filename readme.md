@@ -4,9 +4,9 @@
 The **Ext** version contains the following changes:
 
 * **[in progress]** Added option to use immutable texture storage
- * When possible (when extension is supported) library can create texture using glTextureStorage and then glTexSubImage
+ * When possible (when extension is supported) library can create texture using glTextureStorage and then call glTexSubImage.
  * See more here [OpenGL wiki](http://www.opengl.org/wiki/Texture_Storage)
-* **[in progress]** Mipmap generation using glGenerateMipmap
+* **[done]** Mipmap generation using glGenerateMipmap
  * Original library scaled image to be POT and then used custom procedure to generate mipmaps. This can take some time.
  * This change use glGenerateMipmapEXT (if this extension is available)
 * **[done]** upgraded to the version **1.33** of [stb_image](http://www.nothings.org/stb_image.c)
@@ -15,8 +15,10 @@ The **Ext** version contains the following changes:
  * *CLAMP\_TO\_EDGE* instead of *GL\_CLAMP*
  *  *glGetStringi* instead of *glGetString(GL\_EXTENSIONS)* 
 * **[done]** Visual Studio 2012 Express solution
- * It compiles without any warnings: used *\_CRT_SECURE_NO_WARNINGS* and several code changes regarding *int/float* cast and *signed/unsigned* comparisons.
+ * It compiles without any warnings: used *\_CRT\_SECURE\_NO\_WARNINGS* and several code changes regarding *int/float* cast and *signed/unsigned* comparisons.
+ * Added **test_soil** project to the solution. Console is showed to display basic loader info.
 
 ###Notes###
 * Original functionality is preserved and should work as expected.
 * Doc comments were changed to describe changes
+* Needs more testing :)
