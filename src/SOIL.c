@@ -1923,7 +1923,7 @@ int query_get_string_i_capability( void )
 {
     if (has_get_string_i_capability == SOIL_CAPABILITY_UNKNOWN)
     {
-        soilGlGetStringi = (P_SOIL_GETSTRINGIPROC)wglGetProcAddress("glGetStringi");
+        soilGlGetStringi = (P_SOIL_GETSTRINGIPROC)soilLoadProcAddr("glGetStringi");
 
         if (soilGlGetStringi == NULL)
             has_get_string_i_capability = SOIL_CAPABILITY_NONE;
@@ -1961,18 +1961,26 @@ void *soilLoadProcAddr(const char *procName)
     #ifdef WIN32
 		return wglGetProcAddress(procName);
 	#elif defined(__APPLE__) || defined(__APPLE_CC__)
-		/*	I can't test this Apple stuff!	*/
-        /* obtained from: http://developer.apple.com/library/mac/documentation/GraphicsImaging/Conceptual/OpenGL-MacProgGuide/opengl_entrypts/opengl_entrypts.html */
-	    NSSymbol symbol;
-        char *symbolName;
-        symbolName = malloc (strlen (name) + 2); // 1
-        strcpy(symbolName + 1, name); // 2
-        symbolName[0] = '_'; // 3
-        symbol = NULL;
-        if (NSIsSymbolNameDefined (symbolName)) // 4
-            symbol = NSLookupAndBindSymbol (symbolName);
-        free (symbolName); // 5
-        return symbol ? NSAddressOfSymbol (symbol) : NULL; 
+        /* modified for deprecated methods */
+        CFBundleRef bundle;
+        CFURLRef bundleURL =
+        CFURLCreateWithFileSystemPath(kCFAllocatorDefault,
+                                    CFSTR("/System/Library/Frameworks/OpenGL.framework"),
+                                    kCFURLPOSIXPathStyle,
+                                    true );
+        CFStringRef extensionName =
+        CFStringCreateWithCString(
+                                kCFAllocatorDefault,
+                                "glCompressedTexImage2DARB",
+                                kCFStringEncodingASCII );
+        bundle = CFBundleCreate( kCFAllocatorDefault, bundleURL );
+        assert( bundle != NULL );
+        void *ext_addr = (P_SOIL_GLCOMPRESSEDTEXIMAGE2DPROC)
+        CFBundleGetFunctionPointerForName(bundle, extensionName);
+        CFRelease( bundleURL );
+        CFRelease( extensionName );
+        CFRelease( bundle );
+        return ext_addr;
 	#else   // linux:
 		return glXGetProcAddressARB(procName);
 	#endif   
