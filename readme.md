@@ -8,7 +8,8 @@ The **Ext** version contains the following changes:
  * See more here [OpenGL wiki](http://www.opengl.org/wiki/Texture_Storage)
 * **[done]** Mipmap generation using glGenerateMipmap
  * Original library scaled image to be POT and then used custom procedure to generate mipmaps. This can take some time.
- * This change use glGenerateMipmapEXT (if this extension is available)
+ * This change uses glGenerateMipmapEXT (if GL_EXT_framebuffer_object extension is available). This way Soil can create mipmaps for NPOT textures and use hardware support.
+ * New flag is added: **SOIL_FLAG_GL_MIPMAPS**. It can be passed to the SOIL_load_OGL_texture\* procedures. If the extension (GL_EXT_framebuffer_object) is not supported then function uses the same process as when passing **SOIL_FLAG_MIPMAPS**.
 * **[done]** upgraded to the version **1.33** of [stb_image](http://www.nothings.org/stb_image.c)
  * stb_image_write.c/.h were created. Those files contain missing functionality that was cut from the newer version of stbi (cut in 1.22)  
 * **[done]** Using only Modern OpenGL functionalities (when possible)
