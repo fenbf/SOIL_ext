@@ -52,7 +52,7 @@ enum{
 
 /* for glGetStringi */
 static int has_get_string_i_capability = SOIL_CAPABILITY_UNKNOWN;
-int query_get_string_i_capability( void );
+static int query_get_string_i_capability( void );
 
 #define SOIL_GL_NUM_EXTENSIONS                 0x821D
 typedef const GLubyte * (APIENTRY * P_SOIL_GETSTRINGIPROC) (GLenum name, GLuint index);
@@ -62,7 +62,7 @@ static int soilIsExtensionSupported(const char *name);
 static void *soilLoadProcAddr(const char *procName);
 
 static int has_cubemap_capability = SOIL_CAPABILITY_UNKNOWN;
-int query_cubemap_capability( void );
+static int query_cubemap_capability( void );
 #define SOIL_TEXTURE_WRAP_R					0x8072
 #define SOIL_CLAMP_TO_EDGE					0x812F
 #define SOIL_NORMAL_MAP						0x8511
@@ -80,17 +80,17 @@ int query_cubemap_capability( void );
 
 /*	for non-power-of-two texture	*/
 static int has_NPOT_capability = SOIL_CAPABILITY_UNKNOWN;
-int query_NPOT_capability( void );
+static int query_NPOT_capability( void );
 
 /*	for texture rectangles	*/
 static int has_tex_rectangle_capability = SOIL_CAPABILITY_UNKNOWN;
-int query_tex_rectangle_capability( void );
+static int query_tex_rectangle_capability( void );
 #define SOIL_TEXTURE_RECTANGLE_ARB				0x84F5
 #define SOIL_MAX_RECTANGLE_TEXTURE_SIZE_ARB		0x84F8
 
 /*	for using DXT compression	*/
 static int has_DXT_capability = SOIL_CAPABILITY_UNKNOWN;
-int query_DXT_capability( void );
+static int query_DXT_capability( void );
 #define SOIL_RGB_S3TC_DXT1		0x83F0
 #define SOIL_RGBA_S3TC_DXT1		0x83F1
 #define SOIL_RGBA_S3TC_DXT3		0x83F2
@@ -1961,25 +1961,24 @@ void *soilLoadProcAddr(const char *procName)
     #ifdef WIN32
 		return wglGetProcAddress(procName);
 	#elif defined(__APPLE__) || defined(__APPLE_CC__)
-        /* modified for deprecated methods */
-        CFBundleRef bundle;
-        CFURLRef bundleURL =
-        CFURLCreateWithFileSystemPath(kCFAllocatorDefault,
-                                    CFSTR("/System/Library/Frameworks/OpenGL.framework"),
-                                    kCFURLPOSIXPathStyle,
-                                    true );
-        CFStringRef extensionName =
-        CFStringCreateWithCString(
-                                kCFAllocatorDefault,
-                                "glCompressedTexImage2DARB",
-                                kCFStringEncodingASCII );
-        bundle = CFBundleCreate( kCFAllocatorDefault, bundleURL );
+        /* modified for deprecated methods */        
+        CFURLRef bundleURL = CFURLCreateWithFileSystemPath(kCFAllocatorDefault,
+                                                           CFSTR("/System/Library/Frameworks/OpenGL.framework"),
+                                                           kCFURLPOSIXPathStyle,
+                                                           true );
+        CFStringRef extensionName = CFStringCreateWithCString(kCFAllocatorDefault,
+                                                              procName,
+                                                              kCFStringEncodingASCII );
+        
+        CFBundleRef bundle = CFBundleCreate( kCFAllocatorDefault, bundleURL );
         assert( bundle != NULL );
-        void *ext_addr = (P_SOIL_GLCOMPRESSEDTEXIMAGE2DPROC)
-        CFBundleGetFunctionPointerForName(bundle, extensionName);
+        
+        void *ext_addr = CFBundleGetFunctionPointerForName(bundle, extensionName);
+
         CFRelease( bundleURL );
         CFRelease( extensionName );
         CFRelease( bundle );
+        
         return ext_addr;
 	#else   // linux:
 		return glXGetProcAddressARB(procName);
@@ -2091,26 +2090,25 @@ int query_gen_mipmap_capability( void )
 	/*	check for the capability	*/
 	if( has_gen_mipmap_capability == SOIL_CAPABILITY_UNKNOWN )
 	{
-		/*	we haven't yet checked for the capability, do so	*/
-        if(!soilIsExtensionSupported("GL_EXT_framebuffer_object"))
+        // instead of checking "GL_ARB_framebuffer_object" or "GL_EXT_framebuffer_object"
+        // we simply test the function pointer
+        P_SOIL_PFNGLGENERATEMIPMAPPROC ext_addr = (P_SOIL_PFNGLGENERATEMIPMAPPROC)soilLoadProcAddr("glGenerateMipmap");
+
+		if(ext_addr == NULL)
+		{
+			ext_addr = (P_SOIL_PFNGLGENERATEMIPMAPPROC)soilLoadProcAddr("glGenerateMipmapEXT");
+        }
+
+        if(ext_addr == NULL)
 		{
 			/*	not there, flag the failure	*/
 			has_gen_mipmap_capability = SOIL_CAPABILITY_NONE;
 		} else
-        {
-            P_SOIL_PFNGLGENERATEMIPMAPPROC ext_addr = (P_SOIL_PFNGLGENERATEMIPMAPPROC)soilLoadProcAddr("glGenerateMipmapEXT");
-
-		    if(ext_addr == NULL)
-		    {
-			    /*	not there, flag the failure	*/
-			    has_gen_mipmap_capability = SOIL_CAPABILITY_NONE;
-		    } else
-		    {
-			    /*	it's there!	*/
-			    has_gen_mipmap_capability = SOIL_CAPABILITY_PRESENT;
-                soilGlGenerateMipmap = ext_addr;
-		    }
-        }
+		{
+			/*	it's there!	*/
+			has_gen_mipmap_capability = SOIL_CAPABILITY_PRESENT;
+            soilGlGenerateMipmap = ext_addr;
+		}
 	}
 	/*	let the user know if we can do cubemaps or not	*/
 	return has_gen_mipmap_capability;
