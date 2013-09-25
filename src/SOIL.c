@@ -2129,6 +2129,6 @@ int query_gen_mipmap_capability( void )
             soilGlGenerateMipmap = ext_addr;
 		}
 	}
-	/*	let the user know if we can do cubemaps or not	*/
+	/*	let the user know if we can do glGenerateMipmap or not	*/
 	return has_gen_mipmap_capability;
 }
