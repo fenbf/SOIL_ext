@@ -8,6 +8,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "test_soil", "test_soil.vcxp
 		{C32FB2B4-500C-43CD-A099-EECCE079D3F1} = {C32FB2B4-500C-43CD-A099-EECCE079D3F1}
 	EndProjectSection
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "test_perf_soil", "test_perf_soil.vcxproj", "{58B24A8F-2467-4161-AE13-25677ADDCF78}"
+	ProjectSection(ProjectDependencies) = postProject
+		{C32FB2B4-500C-43CD-A099-EECCE079D3F1} = {C32FB2B4-500C-43CD-A099-EECCE079D3F1}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -30,6 +35,12 @@ Global
 		{6B3784E0-04ED-4CAD-A1F3-DCBB9B75D279}.Release|Win32.ActiveCfg = Release|Win32
 		{6B3784E0-04ED-4CAD-A1F3-DCBB9B75D279}.Release|Win32.Build.0 = Release|Win32
 		{6B3784E0-04ED-4CAD-A1F3-DCBB9B75D279}.Release|x64.ActiveCfg = Release|Win32
+		{58B24A8F-2467-4161-AE13-25677ADDCF78}.Debug|Win32.ActiveCfg = Debug|Win32
+		{58B24A8F-2467-4161-AE13-25677ADDCF78}.Debug|Win32.Build.0 = Debug|Win32
+		{58B24A8F-2467-4161-AE13-25677ADDCF78}.Debug|x64.ActiveCfg = Debug|Win32
+		{58B24A8F-2467-4161-AE13-25677ADDCF78}.Release|Win32.ActiveCfg = Release|Win32
+		{58B24A8F-2467-4161-AE13-25677ADDCF78}.Release|Win32.Build.0 = Release|Win32
+		{58B24A8F-2467-4161-AE13-25677ADDCF78}.Release|x64.ActiveCfg = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

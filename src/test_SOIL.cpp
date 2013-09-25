@@ -19,17 +19,17 @@ int WINAPI WinMain(HINSTANCE hInstance,
                    LPSTR lpCmdLine,
                    int nCmdShow)
 {
-    BOOL ok = AllocConsole();
-    if (ok)
-    {
-        HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
-        int fd = _open_osfhandle((intptr_t)h, 0);
-        FILE *fp = _fdopen( fd, "w" );
-        *stdout = *fp;
-        setvbuf( stdout, NULL, _IONBF, 0 );
-        fprintf(stdout, "Hello worldd\n");
-        SetConsoleTitle("VM Debug");
-    }
+    //BOOL ok = AllocConsole();
+    //if (ok)
+    //{
+    //    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+    //    int fd = _open_osfhandle((intptr_t)h, 0);
+    //    FILE *fp = _fdopen( fd, "w" );
+    //    *stdout = *fp;
+    //    setvbuf( stdout, NULL, _IONBF, 0 );
+    //    fprintf(stdout, "Hello worldd\n");
+    //    SetConsoleTitle("VM Debug");
+    //}
 
     WNDCLASSEX wcex;
     HWND hwnd;
