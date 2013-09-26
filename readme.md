@@ -20,10 +20,10 @@ The **Ext** version contains the following changes:
  * Added **test_soil** project to the solution. Console is showed to display basic loader info.
  * Building with `Debug Information Format` set to `""` (Empty). That way output file is smaller and there are no warnings about missing pdb files.
 * **[done]** Added test\_perf\_SOIL test project
- * tests performance of **SOIL\_FLAG\_GL\_MIPMAPS** vs **SOIL\_FLAG\_MIPMAPS**
- * loads 10... or 100 textures. 
+ * Tests performance of **SOIL\_FLAG\_GL\_MIPMAPS** vs **SOIL\_FLAG\_MIPMAPS**
+ * Loads 10... or 100 textures and measures elapsed time.
 
 ###Notes###
 * Original functionality is preserved and should work as expected.
-* Doc comments were changed to describe changes
+* Doc comments were updated to describe changes
 * Needs more testing :)
