@@ -156,22 +156,31 @@ void CalculateTextureObjectPixels(GLuint texID, unsigned long *pixelCount, unsig
     glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, &maxLevel);
 
     long pixels = 0, bytes = 0, bpp = 0;
-    int texW = 0, texH = 0, texFmt = 0;
+    int texW = 0, texH = 0, texFmt = 0, compressed = 0, compressedBytes = 0;
     for (int level = baseLevel; level <= maxLevel; ++level)
     {
         glGetTexLevelParameteriv(GL_TEXTURE_2D, level, GL_TEXTURE_WIDTH, &texW);
         glGetTexLevelParameteriv(GL_TEXTURE_2D, level, GL_TEXTURE_HEIGHT, &texH);
         glGetTexLevelParameteriv(GL_TEXTURE_2D, level, GL_TEXTURE_INTERNAL_FORMAT, &texFmt);
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, level, GL_TEXTURE_COMPRESSED, &compressed);
         pixels += texW*texH;
 
-        if (texFmt == GL_RGB || texFmt == GL_RGB8)
-            bpp = 3;
-        else if (texFmt == GL_RGBA || texFmt == GL_RGBA8)
-            bpp = 4;
+        if (compressed == GL_TRUE)
+        {
+            glGetTexLevelParameteriv(GL_TEXTURE_2D, level, GL_TEXTURE_COMPRESSED_IMAGE_SIZE, &compressedBytes);
+            bytes += compressedBytes;
+        }
         else
-            bpp = 0;    
+        {
+            if (texFmt == GL_RGB || texFmt == GL_RGB8)
+                bpp = 3;
+            else if (texFmt == GL_RGBA || texFmt == GL_RGBA8)
+                bpp = 4;
+            else
+                bpp = 0;    
 
-        bytes += texW*texH*bpp;
+            bytes += texW*texH*bpp;
+        }
 
         if (texW == 1 && texH == 1)
             break;
@@ -180,30 +189,48 @@ void CalculateTextureObjectPixels(GLuint texID, unsigned long *pixelCount, unsig
     *memoryUsed += bytes;
 }
 
-void LoadTest(const std::vector<std::string> &files, const int numLoads, GLuint *texID, unsigned int soilFlags, long *duration, unsigned long *pixels, unsigned long *pixelsMem)
+struct TestParams
 {
-    long durationMilisec = 0;
-    unsigned long pixelsLoaded = 0;
-    unsigned int texW = 0, texH = 0;
-    size_t numFiles = files.size();
+    std::vector<std::string> files;
+    int numberOfLoads;
+    unsigned int soilFlags;
+};
+
+struct TestOutputs
+{
+    TestOutputs() : durationInMsec(0), totalPixels(0), totalMemoryInBytes(0) { }
+    
+    long durationInMsec;
+    unsigned long totalPixels;
+    unsigned long totalMemoryInBytes;
+};
+
+TestOutputs LoadTest(const TestParams &params)
+{
+    const size_t numFiles = params.files.size();
+    std::vector<GLuint> texID(params.numberOfLoads);
   
-    for (int i = 0; i < numLoads; ++i)
+    TestOutputs outputs;
+
+    for (int i = 0; i < params.numberOfLoads; ++i)
     {
         auto t_start = std::chrono::high_resolution_clock::now();
         {
-            texID[i] = SOIL_load_OGL_texture(files[i%numFiles].c_str(), SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID, soilFlags);
+            texID[i] = SOIL_load_OGL_texture(params.files[i%numFiles].c_str(), SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID, params.soilFlags);
         }
         auto t_end = std::chrono::high_resolution_clock::now();
-        durationMilisec += static_cast<long>(std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count());
+        outputs.durationInMsec += static_cast<long>(std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count());
         
         if (texID[i] == 0)
-            std::cout << "error!, could not load " << files[i%numFiles] << std::endl;
+            std::cout << "error!, could not load " << params.files[i%numFiles] << std::endl;
 
-        CalculateTextureObjectPixels(texID[i], pixels, pixelsMem);
+        CalculateTextureObjectPixels(texID[i], &outputs.totalPixels, &outputs.totalMemoryInBytes);
     }
 
-    *duration = durationMilisec;
-    *pixels = pixelsLoaded;
+    for (int i = 0; i < params.numberOfLoads; ++i)
+        glDeleteTextures(1, &texID[i]);
+
+    return outputs;
 }
 
 void BuildFileLIst(std::vector<std::string> *files, std::string pattern)
@@ -238,7 +265,7 @@ void DoTest(std::vector<std::string> args)
     const char *defaultFiles[NUM_FILES] = { "lenna1.jpg", "lenna2.jpg", "lenna3.jpg" };
     std::vector<std::string> files;
 
-    const int NUM_LOADS = args.size() > 0 ? atoi(args[0].c_str()) : 100;
+    const int NUM_LOADS = args.size() > 0 ? atoi(args[0].c_str()) : 50;
     std::cout << "num of loads: " << NUM_LOADS << std::endl;
     
     if (args.size() > 1)
@@ -252,33 +279,39 @@ void DoTest(std::vector<std::string> args)
 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
-    long duration = 0;
-    unsigned long pixels = 0, pixelsMem = 0;
-    double pixSpeed = 0.0, memSpeed = 0.0, mem = 0.0;
-    std::vector<unsigned int> texID(NUM_LOADS);
-    std::cout.precision(2);
+    // GL_MIPMAP
+    {
+        TestParams paramsMipGL;
+        paramsMipGL.files = files;
+        paramsMipGL.numberOfLoads = NUM_LOADS;
+        paramsMipGL.soilFlags = SOIL_FLAG_GL_MIPMAPS;
 
-    pixels = 0;
-    pixelsMem = 0;
-    LoadTest(files, NUM_LOADS, texID.data(), SOIL_FLAG_GL_MIPMAPS, &duration, &pixels, &pixelsMem);
-    pixSpeed = pixels/((double)duration*0.001);
-    mem = pixelsMem/(double)(1024.0*1024);
-    memSpeed = mem/(double)(duration*0.001);
-    //std::cout << "FLAG_GL_MIPMAPS:\t" << duration*0.001 << "sec, memory:\t" << std::fixed << mem << "MB speed:\t" << std::fixed << memSpeed << " MB/s" << std::endl;
-    printf("FLAG_GL_MIPMAPS: %2.2fsec, memory: %3.2f MB, speed %3.3f MB/s\n", (float)(duration*0.001), (float)mem, (float)memSpeed);
+        TestOutputs resultMipGL = LoadTest(paramsMipGL);
 
-    for (int i = 0; i < NUM_LOADS; ++i)
-        glDeleteTextures(1, &texID[i]);
+        double durationInSec = (double)(resultMipGL.durationInMsec*0.001);
+        double pixSpeed = resultMipGL.totalPixels/durationInSec;
+        double memInMB  = resultMipGL.totalMemoryInBytes/(double)(1024.0*1024);
+        double memSpeed = memInMB/durationInSec;
 
-    pixels = 0;
-    pixelsMem = 0;
-    LoadTest(files, NUM_LOADS, texID.data(), SOIL_FLAG_MIPMAPS, &duration, &pixels, &pixelsMem);
-    pixSpeed = pixels/((double)duration*0.001);
-    mem = pixelsMem/(double)(1024.0*1024);
-    memSpeed = mem/(double)(duration*0.001);
-    //std::cout << "FLAG_MIPMAPS:  \t" << duration*0.001 << "sec, memory:\t" << std::fixed << mem << "MB speed:\t" << std::fixed << memSpeed << " MB/s" << std::endl;
-    printf("FLAG_MIPMAPS:    %2.2fsec, memory: %3.2f MB, speed %3.3f MB/s\n", (float)(duration*0.001), (float)mem, (float)memSpeed);
+        printf("FLAG_GL_MIPMAPS: %2.2fsec, memory: %3.2f MB, speed %3.3f MB/s\n", 
+              (float)(durationInSec), (float)memInMB, (float)memSpeed);
+    }
 
-    for (int i = 0; i < NUM_LOADS; ++i)
-        glDeleteTextures(1, &texID[i]);
+    // MIPMAP soil version
+    {
+        TestParams paramsMip;
+        paramsMip.files = files;
+        paramsMip.numberOfLoads = NUM_LOADS;
+        paramsMip.soilFlags = SOIL_FLAG_MIPMAPS;
+
+        TestOutputs resultMip = LoadTest(paramsMip);
+
+        double durationInSec = (double)(resultMip.durationInMsec*0.001);
+        double pixSpeed = resultMip.totalPixels/durationInSec;
+        double memInMB  = resultMip.totalMemoryInBytes/(double)(1024.0*1024);
+        double memSpeed = memInMB/durationInSec;
+
+        printf("FLAG_MIPMAPS: %2.2fsec, memory: %3.2f MB, speed %3.3f MB/s\n", 
+              (float)(durationInSec), (float)memInMB, (float)memSpeed);
+    }
 }
