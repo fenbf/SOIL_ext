@@ -233,6 +233,15 @@ TestOutputs LoadTest(const TestParams &params)
     return outputs;
 }
 
+void LoadFiles(const std::vector<std::string> &files)
+{
+    for (auto &name : files)
+    {
+        GLuint tex = SOIL_load_OGL_texture(name.c_str(), SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID, 0);
+        glDeleteTextures(1, &tex);
+    }
+}
+
 void BuildFileLIst(std::vector<std::string> *files, std::string pattern)
 {
     WIN32_FIND_DATA ffd;
@@ -278,13 +287,14 @@ void DoTest(std::vector<std::string> args)
     }
 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    LoadFiles(files);
 
     // GL_MIPMAP
     {
         TestParams paramsMipGL;
         paramsMipGL.files = files;
         paramsMipGL.numberOfLoads = NUM_LOADS;
-        paramsMipGL.soilFlags = SOIL_FLAG_GL_MIPMAPS;
+        paramsMipGL.soilFlags = SOIL_FLAG_GL_MIPMAPS | SOIL_FLAG_GL_COMPRESS_TO_DXT;
 
         TestOutputs resultMipGL = LoadTest(paramsMipGL);
 
@@ -302,7 +312,7 @@ void DoTest(std::vector<std::string> args)
         TestParams paramsMip;
         paramsMip.files = files;
         paramsMip.numberOfLoads = NUM_LOADS;
-        paramsMip.soilFlags = SOIL_FLAG_MIPMAPS;
+        paramsMip.soilFlags = SOIL_FLAG_MIPMAPS | SOIL_FLAG_COMPRESS_TO_DXT;
 
         TestOutputs resultMip = LoadTest(paramsMip);
 

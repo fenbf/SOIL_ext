@@ -6,6 +6,7 @@ The **Ext** version contains the following changes:
 * **[in progress]** Added option to use immutable texture storage
  * When possible (when extension is supported) library can create texture using glTextureStorage and then call glTexSubImage.
  * See more here [OpenGL wiki](http://www.opengl.org/wiki/Texture_Storage)
+ * Need to add it to internal\_create\_texture for 2D images, then add it to cube maps and then DDS loading. This may be a lot of work.
 * **[done]** Mipmap generation using glGenerateMipmap
  * Original library scaled image to be POT and then used custom procedure to generate mipmaps. This can take some time.
  * This change uses glGenerateMipmapEXT (if GL\_EXT\_framebuffer\_object extension is available). This way Soil can create mipmaps for NPOT textures and use hardware support.

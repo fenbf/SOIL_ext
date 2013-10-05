@@ -104,6 +104,13 @@ typedef void (APIENTRY * P_SOIL_PFNGLGENERATEMIPMAPPROC) (GLenum target);
 static P_SOIL_PFNGLGENERATEMIPMAPPROC soilGlGenerateMipmap = NULL;
 static int query_gen_mipmap_capability( void );
 
+/* for textureStorage */
+static int has_tex_storage_capability = SOIL_CAPABILITY_UNKNOWN;
+static int query_tex_storage_capability();
+//#define SOIL_TEXTURE_IMMUTABLE_FORMAT 0x912F
+typedef void (APIENTRY * P_SOIL_PFNGLTEXSTORAGE2DPROC) (GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height);
+static P_SOIL_PFNGLTEXSTORAGE2DPROC soilGlTexStorage2D = NULL;
+
 unsigned int SOIL_direct_load_DDS(
 		const char *filename,
 		unsigned int reuse_texture_ID,
@@ -1032,7 +1039,7 @@ static void createMipmaps(const unsigned char *const img,
 				    resampled,
 				    (1 << MIPlevel), (1 << MIPlevel) );
 		    /*  upload the MIPmaps	*/
-		    if( DXT_mode == SOIL_CAPABILITY_PRESENT )
+            if( DXT_mode == SOIL_CAPABILITY_PRESENT && !(flags & SOIL_FLAG_GL_COMPRESS_TO_DXT))
 		    {
 			    /*	user wants me to do the DXT conversion!	*/
 			    int DDS_size;
@@ -1298,7 +1305,7 @@ unsigned int
 		}
 		internal_texture_format = original_texture_format;
 		/*	does the user want me to, and can I, save as DXT?	*/
-		if( flags & SOIL_FLAG_COMPRESS_TO_DXT )
+        if( flags & SOIL_FLAG_COMPRESS_TO_DXT || flags & SOIL_FLAG_GL_COMPRESS_TO_DXT )
 		{
 			DXT_mode = query_DXT_capability();
 			if( DXT_mode == SOIL_CAPABILITY_PRESENT )
@@ -1318,8 +1325,11 @@ unsigned int
 		/*  bind an OpenGL texture ID	*/
 		glBindTexture( opengl_texture_type, tex_id );
 		check_for_GL_errors( "glBindTexture" );
+
+        query_tex_storage_capability();
+
 		/*  upload the main image	*/
-		if( DXT_mode == SOIL_CAPABILITY_PRESENT )
+        if( DXT_mode == SOIL_CAPABILITY_PRESENT && !(flags & SOIL_FLAG_GL_COMPRESS_TO_DXT))
 		{
 			/*	user wants me to do the DXT conversion!	*/
 			int DDS_size;
@@ -2138,4 +2148,35 @@ int query_gen_mipmap_capability( void )
 	}
 	/*	let the user know if we can do glGenerateMipmap or not	*/
 	return has_gen_mipmap_capability;
+}
+
+int query_tex_storage_capability( void )
+{
+	/*	check for the capability	*/
+    if( has_tex_storage_capability == SOIL_CAPABILITY_UNKNOWN )
+	{
+        /*	we haven't yet checked for the capability, do so	*/
+		if(!soilIsExtensionSupported("GL_ARB_texture_storage"))
+		{
+			/*	not there, flag the failure	*/
+			has_tex_storage_capability = SOIL_CAPABILITY_NONE;
+		} else
+		{
+			/*	and find the address of the extension function	*/
+            P_SOIL_PFNGLTEXSTORAGE2DPROC ext_addr = (P_SOIL_PFNGLTEXSTORAGE2DPROC)soilLoadProcAddr("glTexStorage2D");
+			
+			/*	Flag it so no checks needed later	*/
+			if( NULL == ext_addr )
+			{
+				has_tex_storage_capability = SOIL_CAPABILITY_NONE;
+			} else
+			{
+				/*	all's well!	*/
+                soilGlTexStorage2D = ext_addr;
+				has_tex_storage_capability = SOIL_CAPABILITY_PRESENT;
+			}
+		}
+    }
+
+    return has_tex_storage_capability;
 }
